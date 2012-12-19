@@ -301,7 +301,7 @@ bool isSaturated(const double &pixVal, const int &bitpix, const double &bzero){
   return false;
 }
 
-void subtractOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<double> ovrscMean, const int firstColToWrite,const int fullNCol, const int &bitpixIn, const double &bzeroIn, double *outArray){
+void subtractOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<double> ovrscMean, const int firstColToWrite,const int fullNCol, const int &bitpixIn, const double &bzeroIn, double *outArray, long &nSat){
   
   int status = 0;
   double nulval = 0.;
@@ -318,7 +318,6 @@ void subtractOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<doub
   fits_read_subset(infptr, TDOUBLE, fpixel, lpixel, inc, &nulval, sArray, &anynul, &status);
   
 //   cout << nLines << " " << nCol << " " << npix << endl;
-  int nSat = 0;
   for(int l=0;l<nLines;++l){
     for(int c=0;c<nCol;++c){
       if( isSaturated(sArray[nCol*l + c], bitpixIn, bzeroIn) ){
@@ -330,8 +329,6 @@ void subtractOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<doub
       }
     }
   }
-  
-  cout << "\nN SAT: " << nSat << endl;
   
   delete[] sArray;
 }
@@ -360,6 +357,8 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
   if (status != 0) return(status);
   
   
+  ostringstream fileSummary;
+  fileSummary << bold << "\nHDU   #SatPixL   #SatPixR    #SatPixTot\n" << normal;
   
   for (int n=1; n<=nhdu; ++n)  /* Main loop through each extension */
   {
@@ -441,7 +440,7 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
       naxes[1] = yMax-yMin + 1;
     }
     
-    
+    long nSatR=0;
     {/* right side */
       vector<double> ovrscMeanR;
       {
@@ -454,7 +453,7 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
 	int xEnd = (xMax + xMin)/2;
 	long fpixel[2]={xMin,yMin};
 	long lpixel[2]={xEnd,yMax};
-	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanR, 0,naxes[0], bitpixIn, bzeroIn, outArray);
+	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanR, 0,naxes[0], bitpixIn, bzeroIn, outArray, nSatR);
       }
     }
     
@@ -463,6 +462,7 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
       else showProgress((n-1)*3+1,3*nHDUsToProcess);
     }
     
+    long nSatL=0;
     {/* left side */
       vector<double> ovrscMeanL;
       {
@@ -475,7 +475,7 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
 	int xStart = (xMax + xMin)/2 + 1;
 	long fpixel[2]={xStart,yMin};
 	long lpixel[2]={xMax,yMax};
-	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanL, naxes[0]/2, naxes[0], bitpixIn, bzeroIn, outArray);
+	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanL, naxes[0]/2, naxes[0], bitpixIn, bzeroIn, outArray, nSatL);
       }
     }
     
@@ -486,17 +486,14 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
 
     fits_write_img(outfptr, TDOUBLE, 1, totpix, outArray, &status);
     
-
     delete[] outArray;
     
+    fileSummary  << setw (3) << n << "  "  << setw (9) << nSatL << "  " << setw (9) << nSatR << "  " << setw (12) << nSatL+nSatR << endl;
 
     if(gVerbosity){
       if(single) showProgress(3,3*nHDUsToProcess);
       else showProgress((n-1)*3+3,3*nHDUsToProcess);
     }
-    
-    
-    
     
     /* quit if only copying a single HDU */
     if (single) break;
@@ -507,6 +504,8 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
   fits_close_file(infptr,  &status);
   if(gVerbosity){
     showProgress(1,1);
+    
+    cout << endl << fileSummary.str() << endl;
   }
   return status;
 }
