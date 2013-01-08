@@ -286,10 +286,10 @@ bool isSaturated(const double &pixVal, const int &bitpix, const double &bzero){
   
   switch(bitpix) {
       case BYTE_IMG:
-          saturationVal = 256-bzero;
+          saturationVal = 128+bzero;
           break;
       case SHORT_IMG:
-          saturationVal = 65536-bzero;
+          saturationVal = 32768+bzero;
           break;
       default:
           saturationVal = kSatValue;
