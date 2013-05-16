@@ -121,7 +121,7 @@ string bitpix2TypeName(int bitpix){
 }
 
 
-int copyStructure(const string inFile, const char *outF, const int singleHdu){
+int copyStructure(const string inFile, const char *outF, vector<int> &singleHdu){
     
   fitsfile  *outfptr; /* FITS file pointers defined in fitsio.h */
   fitsfile *infptr;   /* FITS file pointers defined in fitsio.h */
@@ -143,20 +143,24 @@ int copyStructure(const string inFile, const char *outF, const int singleHdu){
   
   fits_get_num_hdus(infptr, &nhdu, &status);
   
-  if (singleHdu>0){
-    if(singleHdu > nhdu){
+  /* check the extensions to process*/
+  for(unsigned int i=0;i<singleHdu.size();++i){
+    if(singleHdu[i] > nhdu){
       fits_close_file(infptr,  &status);
       cerr << red << "\nError: the file does not have the required HDU!\n\n" << normal;
       return -1000;
     }
-    single = 1; /* Copy only a single HDU if a specific extension was given */
   }
   
+  if(singleHdu.size() == 0){
+    for(int i=0;i<nhdu;++i){
+      singleHdu.push_back(i+1);
+    }
+  }
+  const unsigned int nUseHdu=singleHdu.size();
+  
   if(single)
-    fileStructSummary << "The output file will contain HDU" << singleHdu << " of " << nhdu << " availables in the input files."<< endl;
-  else
-    fileStructSummary << "The output file will contain all the " << nhdu << " HDUs availables in the input files.\n";
-    
+    fileStructSummary << "The output file will contain " << singleHdu.size() << " of " << nhdu << " hdus availables in the input files."<< endl;  
   
   fits_create_file(&outfptr, outF, &status);/* Create the output file */
   if (status != 0) return(status);
@@ -164,10 +168,9 @@ int copyStructure(const string inFile, const char *outF, const int singleHdu){
   
   fileStructSummary << bold << "HDU   hdutype  #Axis  #Cols  #Rows   IN_datatype      OUT_datatype\n" << normal;
 // HDU  hdutype #Axis #Cols #Rows datatype  
-  for (int n=1; n<=nhdu; ++n)  /* Main loop through each extension */
+  for (unsigned int eI=0; eI<nUseHdu; ++eI)  /* Main loop through each extension */
   {
-
-    if (single) n = singleHdu;
+    const unsigned int n = singleHdu[eI];
     
     /* get image dimensions and total number of pixels in image */
     fits_movabs_hdu(infptr, n, &hdutype, &status);
@@ -232,8 +235,6 @@ int copyStructure(const string inFile, const char *outF, const int singleHdu){
     }
     fileStructSummary << endl;
     
-    /* quit if only copying a single HDU */
-    if (single) break;
   }
   fits_close_file(infptr, &status);
   fits_close_file(outfptr,  &status);
@@ -334,10 +335,8 @@ void subtractOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<doub
 }
 
 
-int computeImage(const string inFile, const char *outF, const int singleHdu){
+int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
   int status = 0;
-  int single = 0;
-  
   int nhdu = 0;
   
   /* Open the output file */
@@ -347,27 +346,23 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
   
   fits_get_num_hdus(outfptr, &nhdu, &status);
   
-  if (singleHdu>0){
-    single = 1; /* Copy only a single HDU if a specific extension was given */
-  }
-  
   fitsfile  *infptr; /* FITS file pointers defined in fitsio.h */
   const char* inF = inFile.c_str();
   fits_open_file(&infptr, inF, READONLY, &status); /* Open the input file */
   if (status != 0) return(status);
   
+  const unsigned int nUseHdu=singleHdu.size();
   
   ostringstream fileSummary;
   fileSummary << bold << "\nHDU   #SatPixL   #SatPixR    #SatPixTot\n" << normal;
   
-  for (int n=1; n<=nhdu; ++n)  /* Main loop through each extension */
+  for (unsigned int eI=0; eI<nUseHdu; ++eI)  /* Main loop through each extension */
   {
-    int nOut = n;
-    if (single){
-      n = singleHdu;
-      nOut = 1;
-    }
-    const int nHDUsToProcess = (single>0)? 1 : nhdu;
+    
+    const unsigned int n = singleHdu[eI];
+    const int nHDUsToProcess = nUseHdu;
+    int nOut = eI+1;
+    
     
     /* get output image dimensions and total number of pixels in image */
     int hdutype, bitpix, bytepix, naxis = 0;
@@ -379,7 +374,6 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
     
     /* Don't try to process data if the hdu is empty */    
     if (hdutype != IMAGE_HDU || naxis == 0 || totpix == 0){
-      if(single) break;
       continue;
     }
     
@@ -407,8 +401,7 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
     
     
     if(gVerbosity){
-      if(single) showProgress(0,3*nHDUsToProcess);
-      else showProgress((n-1)*3+0,3*nHDUsToProcess);
+      showProgress((eI)*3+0,3*nHDUsToProcess);
     }
       
     /* Open the input file */
@@ -458,8 +451,7 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
     }
     
     if(gVerbosity){
-      if(single) showProgress(1,3*nHDUsToProcess);
-      else showProgress((n-1)*3+1,3*nHDUsToProcess);
+      showProgress((eI)*3+1,3*nHDUsToProcess);
     }
     
     long nSatL=0;
@@ -480,8 +472,7 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
     }
     
     if(gVerbosity){
-      if(single) showProgress(2,3*nHDUsToProcess);
-      else showProgress((n-1)*3+2,3*nHDUsToProcess);
+      showProgress((eI)*3+2,3*nHDUsToProcess);
     }
 
     fits_write_img(outfptr, TDOUBLE, 1, totpix, outArray, &status);
@@ -491,12 +482,9 @@ int computeImage(const string inFile, const char *outF, const int singleHdu){
     fileSummary  << setw (3) << n << "  "  << setw (9) << nSatL << "  " << setw (9) << nSatR << "  " << setw (12) << nSatL+nSatR << endl;
 
     if(gVerbosity){
-      if(single) showProgress(3,3*nHDUsToProcess);
-      else showProgress((n-1)*3+3,3*nHDUsToProcess);
+      showProgress((eI)*3+3,3*nHDUsToProcess);
     }
     
-    /* quit if only copying a single HDU */
-    if (single) break;
   }
   
   /* Close the output file */
@@ -522,11 +510,12 @@ void checkArch(){
   }
 }
 
-int processCommandLineArgs(const int argc, char *argv[], int &singleHdu, string &inFile, string &outFile){
+int processCommandLineArgs(const int argc, char *argv[], vector<int> &singleHdu, string &inFile, string &outFile){
   
   if(argc == 1) return 1;
   
   bool outFileFlag = false;
+  singleHdu.clear();
   int opt=0;
   while ( (opt = getopt(argc, argv, "i:o:s:qQhH?")) != -1) {
     switch (opt) {
@@ -541,13 +530,7 @@ int processCommandLineArgs(const int argc, char *argv[], int &singleHdu, string 
       }
       break;
     case 's':
-      if(singleHdu<0){
-        singleHdu = atoi(optarg);
-      }
-      else{
-        cerr << red << "\nError, can not set more than one HDU!\n\n"  << normal;
-        return 2;
-      }
+      singleHdu.push_back(atoi(optarg));
       break;
     case 'Q':
     case 'q':
@@ -596,7 +579,7 @@ int main(int argc, char *argv[])
   
   string outFile;
   string inFile;
-  int singleHdu=-1;
+  vector<int> singleHdu;
   
   int returnCode = processCommandLineArgs( argc, argv, singleHdu, inFile, outFile);
   if(returnCode!=0){
