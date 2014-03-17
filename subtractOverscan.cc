@@ -250,11 +250,17 @@ int copyStructure(const string inFile, const char *outF, vector<int> &singleHdu)
 
 double mean(const double *v, const int &N){
   
+  std::vector<double> temparray(v, v+N);
+  std::sort(temparray.begin(), temparray.end());
+  
+  const int nMin = N/3;
+  const int nMax = 2*N/3;
+  
   double sum=0;
-  for(int i=0;i<N;++i){
-    sum+=v[i];
+  for(int i=nMin;i<nMax;++i){
+    sum+=temparray[i];
   }
-  return sum/N;
+  return sum/(nMax-nMin);
 }
 
 void computeOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<double> &ovrscMean){
