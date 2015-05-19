@@ -87,6 +87,7 @@ void printCopyHelp(const char *exeName, bool printFullHelp=false){
   cout << "  "   << exeName << " <input file> -o <output filename> \n\n";
   cout << "\nOptions:\n";
   cout << "  -q for quiet (no screen output)\n";
+  cout << "  -y for keeping the y-overscan\n";
   cout << "  -s <HDU number> for processing a single HDU \n\n";
   cout << normal;
   cout << blue;
@@ -210,6 +211,9 @@ int copyStructure(const string inFile, const char *outF, vector<int> &singleHdu)
 	istringstream recISS( sRec.substr(tPos+1) );
 
 	recISS >> xMin >> xMax >> yMin >> yMax;
+  if(gKeepParallelOvsc){
+    yMax = naxes[1];
+  }
 	naxes[0] = xMax-xMin + 1;
 	naxes[1] = yMax-yMin + 1;
       }
@@ -435,6 +439,9 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
       istringstream recISS( sRec.substr(tPos+1) );
 
       recISS >> xMin >> xMax >> yMin >> yMax;
+      if(gKeepParallelOvsc){
+        yMax = naxes[1];
+      }
       naxes[0] = xMax-xMin + 1;
       naxes[1] = yMax-yMin + 1;
     }
@@ -523,7 +530,7 @@ int processCommandLineArgs(const int argc, char *argv[], vector<int> &singleHdu,
   bool outFileFlag = false;
   singleHdu.clear();
   int opt=0;
-  while ( (opt = getopt(argc, argv, "i:o:s:qQhH?")) != -1) {
+  while ( (opt = getopt(argc, argv, "i:o:s:qyQhH?")) != -1) {
     switch (opt) {
     case 'o':
       if(!outFileFlag){
@@ -541,6 +548,9 @@ int processCommandLineArgs(const int argc, char *argv[], vector<int> &singleHdu,
     case 'Q':
     case 'q':
       gVerbosity = 0;
+      break;
+    case 'y':
+      gKeepParallelOvsc = true;
       break;
     case 'h':
     case 'H':
