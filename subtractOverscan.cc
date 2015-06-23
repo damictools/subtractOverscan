@@ -88,6 +88,7 @@ void printCopyHelp(const char *exeName, bool printFullHelp=false){
   cout << "\nOptions:\n";
   cout << "  -q for quiet (no screen output)\n";
   cout << "  -y for keeping the y-overscan\n";
+  cout << "  -f for processing images taken at Fermilab (channels 1 & 12)\n";
   cout << "  -s <HDU number> for processing a single HDU \n\n";
   cout << normal;
   cout << blue;
@@ -158,10 +159,11 @@ int copyStructure(const string inFile, const char *outF, vector<int> &singleHdu)
       singleHdu.push_back(i+1);
     }
   }
-  const unsigned int nUseHdu=singleHdu.size();
+  
+  const unsigned int nUseHdu = (singleHdu[0]==-1)? 1 : singleHdu.size();
   
   if(single)
-    fileStructSummary << "The output file will contain " << singleHdu.size() << " of " << nhdu << " hdus availables in the input files."<< endl;  
+    fileStructSummary << "The output file will contain " << nUseHdu << " of " << nhdu << " hdus availables in the input files."<< endl;  
   
   fits_create_file(&outfptr, outF, &status);/* Create the output file */
   if (status != 0) return(status);
@@ -171,7 +173,7 @@ int copyStructure(const string inFile, const char *outF, vector<int> &singleHdu)
 // HDU  hdutype #Axis #Cols #Rows datatype  
   for (unsigned int eI=0; eI<nUseHdu; ++eI)  /* Main loop through each extension */
   {
-    const unsigned int n = singleHdu[eI];
+    const unsigned int n = (singleHdu[0]==-1)? 2 : singleHdu[eI];
     
     /* get image dimensions and total number of pixels in image */
     fits_movabs_hdu(infptr, n, &hdutype, &status);
@@ -361,7 +363,7 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
   fits_open_file(&infptr, inF, READONLY, &status); /* Open the input file */
   if (status != 0) return(status);
   
-  const unsigned int nUseHdu=singleHdu.size();
+  const unsigned int nUseHdu = (singleHdu[0]==-1)? 1 : singleHdu.size();
   
   ostringstream fileSummary;
   fileSummary << bold << "\nHDU   #SatPixL   #SatPixR    #SatPixTot\n" << normal;
@@ -369,7 +371,7 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
   for (unsigned int eI=0; eI<nUseHdu; ++eI)  /* Main loop through each extension */
   {
     
-    const unsigned int n = singleHdu[eI];
+    const unsigned int n = (singleHdu[0]==-1)? 2 : singleHdu[eI];
     const int nHDUsToProcess = nUseHdu;
     int nOut = eI+1;
     
@@ -448,6 +450,7 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
     
     long nSatR=0;
     {/* right side */
+      if(singleHdu[0]==-1) fits_movabs_hdu(infptr, 2, &hdutype, &status);
       vector<double> ovrscMeanR;
       {
 	long fpixel[2]={1+kPrescan,yMin};
@@ -469,6 +472,7 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
     
     long nSatL=0;
     {/* left side */
+      if(singleHdu[0]==-1) fits_movabs_hdu(infptr, 7, &hdutype, &status);
       vector<double> ovrscMeanL;
       {
 	long fpixel[2]={xMax+1,yMin};
@@ -530,7 +534,7 @@ int processCommandLineArgs(const int argc, char *argv[], vector<int> &singleHdu,
   bool outFileFlag = false;
   singleHdu.clear();
   int opt=0;
-  while ( (opt = getopt(argc, argv, "i:o:s:qyQhH?")) != -1) {
+  while ( (opt = getopt(argc, argv, "i:o:s:fqyQhH?")) != -1) {
     switch (opt) {
     case 'o':
       if(!outFileFlag){
@@ -544,6 +548,11 @@ int processCommandLineArgs(const int argc, char *argv[], vector<int> &singleHdu,
       break;
     case 's':
       singleHdu.push_back(atoi(optarg));
+      break;
+    case 'f':
+      singleHdu.clear();
+      singleHdu.push_back(-1);
+      cout << yellow << "\nWill process a Fermi file: channels 0 & 11\n" << normal;
       break;
     case 'Q':
     case 'q':
