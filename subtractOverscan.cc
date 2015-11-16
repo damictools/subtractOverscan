@@ -348,20 +348,21 @@ void subtractOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<doub
 
 
 int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
-  int status = 0;
-  int nhdu = 0;
+  int status  = 0;
+  int nhduOUT = 0;
+  int nhduIN  = 0;
   
   /* Open the output file */
   fitsfile  *outfptr; /* FITS file pointers defined in fitsio.h */
   fits_open_file(&outfptr, outF, READWRITE, &status);
   if (status != 0) return(status);
-  
-  fits_get_num_hdus(outfptr, &nhdu, &status);
+  fits_get_num_hdus(outfptr, &nhduOUT, &status);
   
   fitsfile  *infptr; /* FITS file pointers defined in fitsio.h */
   const char* inF = inFile.c_str();
   fits_open_file(&infptr, inF, READONLY, &status); /* Open the input file */
   if (status != 0) return(status);
+  fits_get_num_hdus(infptr, &nhduIN, &status);
   
   const unsigned int nUseHdu = (singleHdu[0]==-1)? 1 : singleHdu.size();
   
@@ -472,7 +473,7 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
     
     long nSatL=0;
     {/* left side */
-      if(singleHdu[0]==-1) fits_movabs_hdu(infptr, 7, &hdutype, &status);
+      if(singleHdu[0]==-1) fits_movabs_hdu(infptr, nhduIN, &hdutype, &status);
       vector<double> ovrscMeanL;
       {
 	long fpixel[2]={xMax+1,yMin};
