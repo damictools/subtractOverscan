@@ -6,6 +6,7 @@
 
 int  gVerbosity = true;
 bool gKeepParallelOvsc = false;
+bool gKeepSerialOvsc = false;
 
 inline double sq(double x){return x*x;};
 

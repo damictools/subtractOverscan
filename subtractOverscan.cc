@@ -89,6 +89,8 @@ void printCopyHelp(const char *exeName, bool printFullHelp=false){
   cout << "  -q for quiet (no screen output)\n";
   cout << "  -y for keeping the y-overscan\n";
   cout << "  -f for processing images taken at Fermilab (channels 1 & 12)\n";
+  cout << "  -x keep the serial OS in the output image\n";
+  cout << "  -y keep the parallel OS in the output image \n";
   cout << "  -s <HDU number> for processing a single HDU \n\n";
   cout << normal;
   cout << blue;
@@ -200,24 +202,26 @@ int copyStructure(const string inFile, const char *outF, vector<int> &singleHdu)
       char trimsecRecord[1024] = "";
       fits_read_card(infptr, keyName, trimsecRecord, &status);
       if(status==KEY_NO_EXIST){
-	status=0;
+      	status=0;
       }
       else{
-	string sRec(trimsecRecord);
-	replace(sRec.begin(), sRec.end(), '\'', ' ');
-	replace(sRec.begin(), sRec.end(), '[', ' ');
-	replace(sRec.begin(), sRec.end(), ':', ' ');
-	replace(sRec.begin(), sRec.end(), ',', ' ');
-	replace(sRec.begin(), sRec.end(), ']', ' ');
-	size_t tPos = sRec.find("=");
-	istringstream recISS( sRec.substr(tPos+1) );
+      	string sRec(trimsecRecord);
+      	replace(sRec.begin(), sRec.end(), '\'', ' ');
+      	replace(sRec.begin(), sRec.end(), '[', ' ');
+      	replace(sRec.begin(), sRec.end(), ':', ' ');
+      	replace(sRec.begin(), sRec.end(), ',', ' ');
+      	replace(sRec.begin(), sRec.end(), ']', ' ');
+      	size_t tPos = sRec.find("=");
+      	istringstream recISS( sRec.substr(tPos+1) );
 
-	recISS >> xMin >> xMax >> yMin >> yMax;
-  if(gKeepParallelOvsc){
-    yMax = naxes[1];
-  }
-	naxes[0] = xMax-xMin + 1;
-	naxes[1] = yMax-yMin + 1;
+      	recISS >> xMin >> xMax >> yMin >> yMax;
+        if(gKeepParallelOvsc){
+          yMax = naxes[1];
+        }
+        if(gKeepSerialOvsc == false){
+        	naxes[0] = xMax-xMin + 1;
+        }
+      	naxes[1] = yMax-yMin + 1;
       }
       
       
@@ -282,7 +286,7 @@ void computeOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<doubl
   double* sArray = new double[npix];
   /* Read the images as doubles, regardless of actual datatype. */
   fits_read_subset(infptr, TDOUBLE, fpixel, lpixel, inc, &nulval, sArray, &anynul, &status);
-  
+
 //   cout << osL << " " << nCol << " " << npix << endl;
   
   ovrscMean.resize(nCol);
@@ -316,11 +320,11 @@ bool isSaturated(const double &pixVal, const int &bitpix, const double &bzero){
 
 void subtractOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<double> ovrscMean, const int firstColToWrite,const int fullNCol, const int &bitpixIn, const double &bzeroIn, double *outArray, long &nSat){
   
-  int status = 0;
+  int status    = 0;
   double nulval = 0.;
-  int anynul = 0;
+  int anynul    = 0;
   
-  int nLines = (lpixel[1]-fpixel[1]+1);    
+  int nLines     = (lpixel[1]-fpixel[1]+1);    
   const int nCol = (lpixel[0]-fpixel[0]+1); 
   
   
@@ -330,7 +334,7 @@ void subtractOvscMean(fitsfile  *infptr, long *fpixel, long *lpixel, vector<doub
   /* Read the images as doubles, regardless of actual datatype. */
   fits_read_subset(infptr, TDOUBLE, fpixel, lpixel, inc, &nulval, sArray, &anynul, &status);
   
-//   cout << nLines << " " << nCol << " " << npix << endl;
+  // cout << nLines << " " << nCol << " " << npix <<  " " << firstColToWrite <<  " " << fullNCol << endl;
   for(int l=0;l<nLines;++l){
     for(int c=0;c<nCol;++c){
       if( isSaturated(sArray[nCol*l + c], bitpixIn, bzeroIn) ){
@@ -445,7 +449,9 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
       if(gKeepParallelOvsc){
         yMax = naxes[1];
       }
-      naxes[0] = xMax-xMin + 1;
+      if( gKeepSerialOvsc == false){
+        naxes[0] = xMax-xMin + 1;
+      }
       naxes[1] = yMax-yMin + 1;
     }
     
@@ -454,16 +460,19 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
       if(singleHdu[0]==-1) fits_movabs_hdu(infptr, 2, &hdutype, &status);
       vector<double> ovrscMeanR;
       {
-	long fpixel[2]={1+kPrescan,yMin};
-	long lpixel[2]={xMin-1,yMax};
-	computeOvscMean(infptr, fpixel, lpixel, ovrscMeanR);
+      	long fpixel[2]={1+kPrescan,yMin};
+      	long lpixel[2]={xMin-1,yMax};
+      	computeOvscMean(infptr, fpixel, lpixel, ovrscMeanR);
       }
 
       {
-	int xEnd = (xMax + xMin)/2;
-	long fpixel[2]={xMin,yMin};
-	long lpixel[2]={xEnd,yMax};
-	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanR, 0,naxes[0], bitpixIn, bzeroIn, outArray, nSatR);
+      	int xEnd = (xMax + xMin)/2;
+      	long fpixel[2]={xMin,yMin};
+      	long lpixel[2]={xEnd,yMax};
+        if(gKeepSerialOvsc){
+          fpixel[0] = 1;   
+        }
+      	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanR, 0,naxes[0], bitpixIn, bzeroIn, outArray, nSatR);
       }
     }
     
@@ -476,16 +485,19 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
       if(singleHdu[0]==-1) fits_movabs_hdu(infptr, nhduIN, &hdutype, &status);
       vector<double> ovrscMeanL;
       {
-	long fpixel[2]={xMax+1,yMin};
-	long lpixel[2]={naxesIn[0]-kPrescan,yMax};
-	computeOvscMean(infptr, fpixel, lpixel, ovrscMeanL);
+      	long fpixel[2]={xMax+1,yMin};
+      	long lpixel[2]={naxesIn[0]-kPrescan,yMax};
+      	computeOvscMean(infptr, fpixel, lpixel, ovrscMeanL);
       }
 
       {
-	int xStart = (xMax + xMin)/2 + 1;
-	long fpixel[2]={xStart,yMin};
-	long lpixel[2]={xMax,yMax};
-	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanL, naxes[0]/2, naxes[0], bitpixIn, bzeroIn, outArray, nSatL);
+      	int xStart = (xMax + xMin)/2 + 1;
+      	long fpixel[2]={xStart,yMin};
+      	long lpixel[2]={xMax,yMax};
+        if(gKeepSerialOvsc){
+          lpixel[0] = naxes[0];   
+        }
+      	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanL, naxes[0]/2, naxes[0], bitpixIn, bzeroIn, outArray, nSatL);
       }
     }
     
@@ -535,7 +547,7 @@ int processCommandLineArgs(const int argc, char *argv[], vector<int> &singleHdu,
   bool outFileFlag = false;
   singleHdu.clear();
   int opt=0;
-  while ( (opt = getopt(argc, argv, "i:o:s:fqyQhH?")) != -1) {
+  while ( (opt = getopt(argc, argv, "i:o:s:fqxyQhH?")) != -1) {
     switch (opt) {
     case 'o':
       if(!outFileFlag){
@@ -561,6 +573,9 @@ int processCommandLineArgs(const int argc, char *argv[], vector<int> &singleHdu,
       break;
     case 'y':
       gKeepParallelOvsc = true;
+      break;
+    case 'x':
+      gKeepSerialOvsc = true;
       break;
     case 'h':
     case 'H':
