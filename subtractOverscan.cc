@@ -87,7 +87,6 @@ void printCopyHelp(const char *exeName, bool printFullHelp=false){
   cout << "  "   << exeName << " <input file> -o <output filename> \n\n";
   cout << "\nOptions:\n";
   cout << "  -q for quiet (no screen output)\n";
-  cout << "  -y for keeping the y-overscan\n";
   cout << "  -f for processing images taken at Fermilab (channels 1 & 12)\n";
   cout << "  -x keep the serial OS in the output image\n";
   cout << "  -y keep the parallel OS in the output image \n";
