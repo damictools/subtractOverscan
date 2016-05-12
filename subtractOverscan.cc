@@ -161,7 +161,7 @@ int copyStructure(const string inFile, const char *outF, vector<int> &singleHdu)
     }
   }
   
-  const unsigned int nUseHdu = (singleHdu[0]==-1)? 1 : singleHdu.size();
+  const unsigned int nUseHdu = (singleHdu[0]<0)? 1 : singleHdu.size();
   
   if(single)
     fileStructSummary << "The output file will contain " << nUseHdu << " of " << nhdu << " hdus availables in the input files."<< endl;  
@@ -174,7 +174,8 @@ int copyStructure(const string inFile, const char *outF, vector<int> &singleHdu)
 // HDU  hdutype #Axis #Cols #Rows datatype  
   for (unsigned int eI=0; eI<nUseHdu; ++eI)  /* Main loop through each extension */
   {
-    const unsigned int n = (singleHdu[0]==-1)? 2 : singleHdu[eI];
+    unsigned int n = (singleHdu[0]==-1)? 2 : singleHdu[eI];
+    if(singleHdu[0]==-2) n = 1; // Chicago file
     
     /* get image dimensions and total number of pixels in image */
     fits_movabs_hdu(infptr, n, &hdutype, &status);
@@ -368,6 +369,7 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
   fits_get_num_hdus(infptr, &nhduIN, &status);
   
   const unsigned int nUseHdu = (singleHdu[0]==-1)? 1 : singleHdu.size();
+  const bool isFromChicago = (singleHdu[0]==-2);
   
   ostringstream fileSummary;
   fileSummary << bold << "\nHDU   #SatPixL   #SatPixR    #SatPixTot\n" << normal;
@@ -375,7 +377,8 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
   for (unsigned int eI=0; eI<nUseHdu; ++eI)  /* Main loop through each extension */
   {
     
-    const unsigned int n = (singleHdu[0]==-1)? 2 : singleHdu[eI];
+    unsigned int n = (singleHdu[0]==-1)? 2 : singleHdu[eI];
+    if(singleHdu[0]==-2) n = 1; // Chicago file
     const int nHDUsToProcess = nUseHdu;
     int nOut = eI+1;
     
@@ -455,7 +458,7 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
     }
     
     long nSatR=0;
-    {/* right side */
+    if(!isFromChicago){/* right side */
       if(singleHdu[0]==-1) fits_movabs_hdu(infptr, 2, &hdutype, &status);
       vector<double> ovrscMeanR;
       {
@@ -490,13 +493,19 @@ int computeImage(const string inFile, const char *outF, vector<int> &singleHdu){
       }
 
       {
-      	int xStart = (xMax + xMin)/2 + 1;
-      	long fpixel[2]={xStart,yMin};
-      	long lpixel[2]={xMax,yMax};
+        long firstColToWrite = naxes[0]/2;
+        int xStart = (xMax + xMin)/2 + 1;
+        if(isFromChicago){
+          xStart = xMin;
+          firstColToWrite = 0;
+        }
+        long fpixel[2]={xStart,yMin};
+        long lpixel[2]={xMax,yMax};
+
         if(gKeepSerialOvsc){
           lpixel[0] = naxes[0];   
         }
-      	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanL, naxes[0]/2, naxes[0], bitpixIn, bzeroIn, outArray, nSatL);
+      	subtractOvscMean(infptr, fpixel, lpixel, ovrscMeanL, firstColToWrite, naxes[0], bitpixIn, bzeroIn, outArray, nSatL);
       }
     }
     
@@ -546,7 +555,7 @@ int processCommandLineArgs(const int argc, char *argv[], vector<int> &singleHdu,
   bool outFileFlag = false;
   singleHdu.clear();
   int opt=0;
-  while ( (opt = getopt(argc, argv, "i:o:s:fqxyQhH?")) != -1) {
+  while ( (opt = getopt(argc, argv, "i:o:s:fcqxyQhH?")) != -1) {
     switch (opt) {
     case 'o':
       if(!outFileFlag){
@@ -565,6 +574,11 @@ int processCommandLineArgs(const int argc, char *argv[], vector<int> &singleHdu,
       singleHdu.clear();
       singleHdu.push_back(-1);
       cout << yellow << "\nWill process a Fermi file: channels 0 & 11\n" << normal;
+      break;
+    case 'c':
+      singleHdu.clear();
+      singleHdu.push_back(-2);
+      cout << yellow << "\nWill process a Chicago file: channel 0 & only one side\n" << normal;
       break;
     case 'Q':
     case 'q':
